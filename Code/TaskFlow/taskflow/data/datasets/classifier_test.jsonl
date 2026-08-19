@@ -1,0 +1,14 @@
+{"text": "My card was charged twice for order #9921", "intent": "billing"}
+{"text": "I need a reimbursement for unused seat licenses", "intent": "refund"}
+{"text": "Close my account immediately and erase my data", "intent": "cancellation"}
+{"text": "How do we request custom SOC2 report under NDA?", "intent": "enterprise"}
+{"text": "Webhook endpoint keeps timing out with 504", "intent": "technical"}
+{"text": "This bug ruined our production system!", "intent": "complaint"}
+{"text": "Where is your team based?", "intent": "other"}
+{"text": "My card was charged twice for order #9921", "intent": "billing"}
+{"text": "I need a reimbursement for unused seat licenses", "intent": "refund"}
+{"text": "Close my account immediately and erase my data", "intent": "cancellation"}
+{"text": "How do we request custom SOC2 report under NDA?", "intent": "enterprise"}
+{"text": "Webhook endpoint keeps timing out with 504", "intent": "technical"}
+{"text": "This bug ruined our production system!", "intent": "complaint"}
+{"text": "Where is your team based?", "intent": "other"}

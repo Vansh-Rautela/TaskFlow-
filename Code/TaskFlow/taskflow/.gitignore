@@ -1,0 +1,15 @@
+.env
+secrets/
+*.db
+*.db-wal
+*.db-shm
+data/qdrant/
+src/taskflow/ml/artifacts/*.joblib
+src/taskflow/ml/artifacts/*.npy
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.streamlit/secrets.toml
+!data/snapshots/demo_seed.db

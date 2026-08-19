@@ -1,0 +1,14 @@
+{"text": "I was double charged on my last invoice", "intent": "billing"}
+{"text": "Can I get a prorated refund for my plan?", "intent": "refund"}
+{"text": "I want to cancel my subscription immediately", "intent": "cancellation"}
+{"text": "How do I setup SSO SAML for Enterprise?", "intent": "enterprise"}
+{"text": "API requests are returning 500 error", "intent": "technical"}
+{"text": "Your service downtime ruined my product launch", "intent": "complaint"}
+{"text": "What are your office hours?", "intent": "other"}
+{"text": "I was double charged on my last invoice", "intent": "billing"}
+{"text": "Can I get a prorated refund for my plan?", "intent": "refund"}
+{"text": "I want to cancel my subscription immediately", "intent": "cancellation"}
+{"text": "How do I setup SSO SAML for Enterprise?", "intent": "enterprise"}
+{"text": "API requests are returning 500 error", "intent": "technical"}
+{"text": "Your service downtime ruined my product launch", "intent": "complaint"}
+{"text": "What are your office hours?", "intent": "other"}

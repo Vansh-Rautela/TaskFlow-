@@ -1,0 +1,39 @@
+# Fast-path template responses. Zero LLM calls; these are the answers to questions
+# we already know the answer to. Each must cite the KB doc it was written from so
+# the citation panel in the trace viewer still works.
+
+templates:
+  password_reset:
+    match_questions:
+      - "how do i reset my password"
+      - "forgot my password"
+      - "cant log in password"
+      - "password reset link"
+    citation_doc: account_password_reset
+    body: |
+      Hi,
+
+      You can reset your password from the sign-in page: choose "Forgot password",
+      enter the email on your TaskFlow account, and we'll send a reset link. The link
+      is valid for 60 minutes. [{{citation}}]
+
+      If the email doesn't arrive within a few minutes, check your spam folder, and
+      make sure you're using the address your workspace invite was sent to.
+
+      Best,
+      TaskFlow Support
+
+  billing_cycle:
+    match_questions:
+      - "when am i billed"
+      - "what is my billing date"
+      - "when does my subscription renew"
+    citation_doc: billing_cycles
+    body: |
+      Hi,
+
+      TaskFlow bills on the same day each month, based on the date your paid plan
+      started. Seat changes mid-cycle are prorated on the next invoice. [{{citation}}]
+
+      Best,
+      TaskFlow Support

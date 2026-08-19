@@ -1,0 +1,31 @@
+weights:                       # sum to 1.0 — quality signals only, no safety signals
+  citation_coverage: 0.35
+  grounding_entailment: 0.25
+  retrieval_relevance: 0.20
+  intent_confidence: 0.10
+  tone_alignment: 0.10
+
+thresholds:                    # per-intent auto-send bar
+  general: 0.70
+  technical: 0.70
+  account: 0.70
+  feature_request: 0.75
+  billing: 0.80
+  refund: 0.90
+  complaint: 1.01              # unreachable by construction; also blocked by G4
+  unknown: 1.01
+
+gates:
+  abstain_threshold: 0.55
+  min_grounding_ratio: 0.80
+  max_unsupported_claims: 0
+
+retrieval:
+  prefetch_k: 20
+  rerank_k: 5
+  min_top_score: 0.35
+  min_support_score: 0.20
+  min_support_count: 2
+
+sla_minutes: {default: 120, complaint: 60, refund: 60}
+validator_timeout_s: 15

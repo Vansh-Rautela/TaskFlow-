@@ -1,0 +1,103 @@
+[project]
+name = "taskflow"
+version = "0.1.0"
+description = "Autonomous email + chat support agent with human-in-the-loop governance"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    # web + api
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.12",
+    # models + config
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "pyyaml>=6.0",
+    # persistence
+    "sqlalchemy[asyncio]>=2.0.36",
+    "aiosqlite>=0.20",
+    "alembic>=1.14",
+    # retrieval (embedded qdrant — NO server, NO docker)
+    "qdrant-client[fastembed]>=1.12",
+    "sentence-transformers>=3.3",
+    # ml
+    "scikit-learn>=1.5",
+    "numpy>=2.0",
+    "joblib>=1.4",
+    # llm providers
+    "anthropic>=0.40",
+    "ollama>=0.4",
+    # channels
+    "google-api-python-client>=2.150",
+    "google-auth-oauthlib>=1.2",
+    # ops
+    "httpx>=0.28",
+    "tenacity>=9.0",
+    "structlog>=24.4",
+    "streamlit>=1.40",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "types-PyYAML",
+    "import-linter>=2.1",
+    "pre-commit>=4.0",
+    "matplotlib>=3.9",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/taskflow"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC", "RUF"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_ignores = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["taskflow.domain.*", "taskflow.services.*", "taskflow.ports.*"]
+disallow_untyped_defs = true
+strict_equality = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "integration: touches qdrant/sqlite/ollama on disk",
+    "live: makes real Claude API calls (costs money)",
+    "e2e: needs the full app running",
+    "slow: takes more than 5 seconds",
+]
+
+# Architectural boundary, enforced by CI. This is the rule that makes
+# "SQLite -> Postgres is a config change" a true statement instead of a claim.
+[tool.importlinter]
+root_package = "taskflow"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "domain and services never touch adapters or SDKs"
+type = "forbidden"
+source_modules = ["taskflow.domain", "taskflow.services"]
+forbidden_modules = [
+    "taskflow.adapters", "taskflow.api", "taskflow.worker", "taskflow.dashboard",
+    "anthropic", "ollama", "qdrant_client", "googleapiclient", "sqlalchemy", "streamlit",
+]

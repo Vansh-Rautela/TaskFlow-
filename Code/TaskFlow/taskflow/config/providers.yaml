@@ -1,0 +1,57 @@
+# Model ids live here and nowhere else. A pre-commit hook fails the build if a model
+# name appears in Python source. See ADR-004.
+
+# cloud_first : Claude primary, Ollama fallback           (normal development)
+# local_only  : Ollama only, no network required at all   (demo insurance)
+mode: cloud_first
+
+priority:
+  cloud_first: [openrouter, claude, ollama]
+  local_only: [ollama]
+
+providers:
+  openrouter:
+    api_key_env: OPENROUTER_API_KEY
+    capabilities:
+      supports_json_schema: true
+      supports_tools: true
+      max_context: 200000
+    models:
+      classification: openai/gpt-4o-mini
+      draft: openai/gpt-4o-mini
+      grounding: openai/gpt-4o-mini
+      datagen: openai/gpt-4o-mini
+    timeout_s: 30
+    pricing: {in_per_1k: 0.001, out_per_1k: 0.005}
+
+  claude:
+    api_key_env: ANTHROPIC_API_KEY
+    capabilities:
+      supports_json_schema: true      # output_config.format, constrained decoding
+      supports_tools: true
+      max_context: 200000
+    models:
+      draft: claude-haiku-4-5
+      grounding: claude-haiku-4-5
+      datagen: claude-sonnet-4-5      # better prose for synthetic test data
+    timeout_s: 30
+    # Verify current prices at https://claude.com/pricing#api before quoting a figure.
+    pricing: {in_per_1k: 0.0, out_per_1k: 0.0}   # <- fill in from the pricing page
+
+  ollama:
+    base_url_env: OLLAMA_BASE_URL
+    capabilities:
+      supports_json_schema: true      # `format=` compiles the schema to a GBNF grammar
+      supports_tools: false
+      max_context: 32000
+    models:
+      draft: qwen2.5:7b-instruct      # drop to qwen2.5:3b-instruct if your laptop is slow
+      grounding: qwen2.5:7b-instruct
+      datagen: qwen2.5:7b-instruct
+    timeout_s: 120                    # local generation is slower; measure yours in P4
+    pricing: {in_per_1k: 0.0, out_per_1k: 0.0}
+
+budgets:
+  max_llm_calls_per_message: 3        # draft + grounding + one retry ceiling
+  daily_spend_usd: 2.00
+  alert_at_pct: 80

@@ -1,0 +1,69 @@
+# config/policies.yaml
+rules:
+  - id: refund_ceiling
+    severity: critical
+    description: "Support may not promise refunds above $500 without finance approval."
+    detect:
+      type: amount_over
+      pattern: '\$\s?([0-9][0-9,]*(?:\.[0-9]{2})?)'
+      threshold: 500
+    message: "Refund amount exceeds the $500 agent ceiling."
+
+  - id: no_feature_dates
+    severity: critical
+    description: "Never commit to a ship date for an unreleased feature."
+    detect:
+      type: regex_any
+      patterns:
+        - '(will be|should be|expect(ed)? to be) (available|released|shipped|live) (in|by|on) '
+        - '(next|this) (week|month|quarter) we (will|shall) (ship|release|launch)'
+    message: "Response promises a delivery date."
+
+  - id: no_credential_request
+    severity: critical
+    description: "Never ask a customer for a password, 2FA code, or API key."
+    detect:
+      type: regex_any
+      patterns: ['(send|share|provide|confirm) (me )?(your )?(password|passcode|2fa|otp|api[ -]?key)']
+    message: "Response requests credentials."
+
+  - id: legal_threat_escalation
+    severity: critical
+    description: "Any legal threat in the inbound message must go to a human."
+    applies_to: inbound
+    detect:
+      type: regex_any
+      patterns: ['(lawyer|attorney|legal action|sue|lawsuit|small claims|gdpr complaint)']
+    message: "Inbound message contains a legal threat."
+
+  - id: gdpr_deletion_routing
+    severity: critical
+    applies_to: inbound
+    detect: {type: regex_any, patterns: ['(delete|erase|remove) (all )?(my|our) (data|account|personal data)']}
+    message: "Data-deletion requests are handled by the privacy team."
+
+  - id: no_discount_invention
+    severity: critical
+    detect: {type: regex_any, patterns: ['\b(\d{1,2})%\s*(off|discount)', 'free (month|year|upgrade)']}
+    message: "Response offers a discount not defined in the knowledge base."
+
+  - id: pricing_accuracy
+    severity: warning
+    detect: {type: price_mismatch, known: {pro: 12, enterprise: 29}}
+    message: "Quoted price does not match the current price list."
+
+  - id: no_security_details
+    severity: critical
+    detect: {type: regex_any, patterns: ['(our|the) (database|infrastructure) (runs|uses)', 'internal (endpoint|service|hostname)']}
+    message: "Response discloses internal system details."
+
+  - id: no_competitor_disparagement
+    severity: warning
+    detect: {type: regex_any, patterns: ['(worse|inferior|broken) than']}
+    message: "Response disparages a third party."
+
+  - id: escalation_language_required
+    severity: warning
+    applies_when: {intent: [complaint, refund]}
+    detect: {type: regex_absent, patterns: ['(I(\047m| am) sorry|I apologi[sz]e|understand your frustration)']}
+    message: "Sensitive response lacks acknowledgement language."

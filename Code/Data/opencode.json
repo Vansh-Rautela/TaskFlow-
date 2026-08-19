@@ -1,0 +1,13 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "excalidraw": {
+      "type": "local",
+      "command": [
+        "node",
+        "/home/v4/excalidraw-mcp/dist/index.js",
+        "--stdio"
+      ]
+    }
+  }
+}

@@ -1,0 +1,5 @@
+{"scenario_id": "billing_double", "text": "I was double charged on my invoice #INV-9081", "expected_action": "auto_send"}
+{"scenario_id": "refund_750", "text": "I want a full refund of $750 for my annual subscription", "expected_action": "human_review"}
+{"scenario_id": "complaint_angry", "text": "Your service is completely broken and I demand an immediate escalation", "expected_action": "human_review"}
+{"scenario_id": "sso_question", "text": "How do I configure Okta SSO for our organization?", "expected_action": "auto_send"}
+{"scenario_id": "gibberish", "text": "asdfghjkl 12345 xyz", "expected_action": "human_review"}

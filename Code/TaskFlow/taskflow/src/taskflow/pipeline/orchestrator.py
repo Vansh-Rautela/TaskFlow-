@@ -1,0 +1,146 @@
+"""The Pipeline Orchestrator.
+
+This is the walking skeleton from Phase P2.
+It defines the strict sequential path of the message through the system.
+No hidden event buses or magics. Top-to-bottom explicitness.
+"""
+
+import time
+from collections.abc import Coroutine
+from dataclasses import dataclass
+from typing import Any
+
+from taskflow.adapters.llm.router import ProviderRouter
+from taskflow.adapters.vector.qdrant_store import QdrantVectorStore
+from taskflow.domain.models import InboundMessage, RoutingDecision
+from taskflow.pipeline.state import PipelineState
+from taskflow.ports.repositories import TraceRepository
+from taskflow.ports.vector_store import VectorStore
+from taskflow.services.classify.service import classify_intent
+from taskflow.services.confidence.gates import evaluate_gates
+from taskflow.services.confidence.scorer import compute, decide
+from taskflow.services.draft.service import generate_draft
+from taskflow.services.retrieve.service import retrieve_context
+from taskflow.services.validate.runner import run_validators
+
+
+@dataclass
+class Deps:
+    """Dependency injection container for the pipeline scope."""
+
+    trace_repo: TraceRepository
+    llm_router: ProviderRouter
+    vector_store: VectorStore | None = None
+
+
+async def _time_stage[T](
+    state: PipelineState, deps: Deps, stage: str, coro: Coroutine[Any, Any, T]
+) -> tuple[PipelineState, T]:
+    """Helper to trace how long a stage took."""
+    start = time.perf_counter_ns()
+    result = await coro
+    elapsed_ms = (time.perf_counter_ns() - start) // 1_000_000
+
+    # We log an event to the trace immediately
+    await deps.trace_repo.event(
+        trace_id=state.trace.trace_id,
+        stage=stage,
+        payload={},  # We will refine payloads later
+        elapsed_ms=elapsed_ms,
+    )
+    return state, result
+
+
+async def run_pipeline(msg: InboundMessage, deps: Deps) -> RoutingDecision:
+    """Execute the full AI support agent pipeline path."""
+
+    # 0. Initialize Trace & State
+    trace = await deps.trace_repo.start(msg)
+    state = PipelineState(message=msg, trace=trace)
+
+    # 1. Classify
+    state, (intent, intent_confidence) = await _time_stage(
+        state, deps, "classify", classify_intent(msg.body_text, router=deps.llm_router)
+    )
+    state = state.replace(intent=intent, intent_confidence=intent_confidence)
+
+    # 2. Retrieve
+    store = deps.vector_store or QdrantVectorStore()
+    state, retrieval = await _time_stage(
+        state, deps, "retrieve", retrieve_context(msg.body_text, msg.tenant_id, vector_store=store)
+    )
+    state = state.replace(retrieval=retrieval)
+
+    # 3. Draft
+    assert state.intent is not None
+    assert state.retrieval is not None
+    state, draft = await _time_stage(
+        state, deps, "draft", generate_draft(msg, state.intent, state.retrieval, deps.llm_router)
+    )
+    state = state.replace(draft=draft)
+
+    # 4. Validate
+    assert state.draft is not None
+    state, validators = await _time_stage(
+        state, deps, "validate", run_validators(state.draft, state.retrieval)
+    )
+    state = state.replace(validators=tuple(validators))
+
+    # 5. Evaluate Gates (Safety Vetoes)
+    assert state.intent is not None
+    state, gates_result = await _time_stage(
+        state,
+        deps,
+        "evaluate_gates",
+        # Using async wrapper just for timing consistency, though this is synchronous math
+        asyncio_wrap(
+            evaluate_gates(
+                intent=state.intent,
+                intent_confidence=state.intent_confidence,
+                abstain_threshold=0.55,  # hardcoded config for P2 stub
+                validators=list(state.validators),
+                violations=[],  # assuming none for pipeline mock scenario
+                citations_resolve=True,  # assuming true unless citations validator failed
+                suspicious_context=False,
+            )
+        ),
+    )
+
+    # 6. Score & Decide (Quality math)
+    weights = {
+        "citation_coverage": 0.35,
+        "grounding_entailment": 0.25,
+        "retrieval_relevance": 0.20,
+        "intent_confidence": 0.10,
+        "tone_alignment": 0.10,
+    }
+    signals = {
+        "intent_confidence": state.intent_confidence,
+        "retrieval_relevance": 1.0 if (state.retrieval and state.retrieval.sufficient) else 0.0,
+        "citation_coverage": 1.0
+        if any(v.validator_name == "citations" and v.passed for v in state.validators)
+        else 0.0,
+        "grounding_entailment": 1.0,  # Stub for P2 skeleton (will be provided by grounding validator in P7)
+        "tone_alignment": 1.0,  # Stub for P2 skeleton (will be provided by tone validator in P7)
+    }
+
+    breakdown = compute(
+        gates=gates_result,
+        signals=signals,
+        weights=weights,
+        threshold=0.70,  # hardcoded for P2 stub
+        draft_confidence=state.draft.draft_confidence if state.draft else 0.0,
+    )
+
+    decision = decide(breakdown)
+    state = state.replace(confidence=breakdown, decision=decision)
+
+    # 7. Finalize trace
+    await deps.trace_repo.update(state.trace)
+    await deps.trace_repo.finish(state.trace.trace_id, decision)
+
+    return decision
+
+
+async def asyncio_wrap(result):
+    return result

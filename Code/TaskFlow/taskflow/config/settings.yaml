@@ -1,0 +1,35 @@
+tenant_id: taskflow-demo
+
+retrieval:
+  prefetch_k: 20          # per branch (dense, bm25) before fusion
+  rerank_k: 5             # chunks handed to the drafting model
+  chunk_target_tokens: 450
+  chunk_overlap_tokens: 60
+  alias_expansions:
+    2fa: two-factor authentication
+    sso: single sign-on
+    api key: api token credential
+    invoice: billing statement invoice
+
+worker:
+  claim_lease_minutes: 5  # after this, a crashed worker's message is reclaimed
+  max_attempts: 3
+  poll_interval_s: 1.0
+
+pollers:
+  gmail_interval_s: 30
+  sla_tick_s: 30
+  outbox_interval_s: 5
+
+spam:
+  keywords: [free iphone, click here to claim, you have won, crypto investment, act now]
+  max_links: 5
+  min_body_chars: 10
+
+fastpath:
+  cache_ttl_s: 86400
+  normalize: [lowercase, strip_punctuation, collapse_whitespace]
+
+alerts:
+  channel: teams          # teams | fallback  (fallback = dashboard panel + email)
+  ops_email_env: OPS_EMAIL
