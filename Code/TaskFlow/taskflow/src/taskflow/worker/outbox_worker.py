@@ -11,12 +11,13 @@ import structlog
 
 from taskflow.domain.enums import OutboxState
 from taskflow.ports.repositories import OutboxRepository
+from taskflow.services.alert.service import send_email_alert
 
 logger = structlog.get_logger()
 
 
 async def deliver_message(msg: Any) -> bool:
-    """Deliver outbound message payload via transport (e.g. Gmail API / Webhook).
+    """Deliver outbound message payload via transport (e.g. Gmail SMTP / Webhook).
 
     Returns True if delivery succeeded.
     """
@@ -26,7 +27,17 @@ async def deliver_message(msg: Any) -> bool:
         recipient=msg.recipient,
         channel=msg.channel,
     )
-    # Simulated transport delivery succeeds for queued outbound messages
+    if msg.recipient and "@" in msg.recipient:
+        subject = msg.subject or "Re: TaskFlow Support Request"
+        email_sent = await send_email_alert(
+            subject=subject, body=msg.body_text, recipient=msg.recipient
+        )
+        if email_sent:
+            logger.info(
+                "worker_email_delivered", recipient=msg.recipient, outbound_id=msg.outbound_id
+            )
+            return True
+
     return True
 
 

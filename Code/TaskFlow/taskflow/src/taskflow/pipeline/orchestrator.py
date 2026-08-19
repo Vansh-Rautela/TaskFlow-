@@ -14,7 +14,7 @@ from taskflow.adapters.llm.router import ProviderRouter
 from taskflow.adapters.vector.qdrant_store import QdrantVectorStore
 from taskflow.domain.models import InboundMessage, RoutingDecision
 from taskflow.pipeline.state import PipelineState
-from taskflow.ports.repositories import TraceRepository
+from taskflow.ports.repositories import OutboxRepository, ReviewRepository, TraceRepository
 from taskflow.ports.vector_store import VectorStore
 from taskflow.services.classify.service import classify_intent
 from taskflow.services.confidence.gates import evaluate_gates
@@ -31,6 +31,8 @@ class Deps:
     trace_repo: TraceRepository
     llm_router: ProviderRouter
     vector_store: VectorStore | None = None
+    review_repo: ReviewRepository | None = None
+    outbox_repo: OutboxRepository | None = None
 
 
 async def _time_stage[T](
@@ -134,6 +136,45 @@ async def run_pipeline(msg: InboundMessage, deps: Deps) -> RoutingDecision:
 
     decision = decide(breakdown)
     state = state.replace(confidence=breakdown, decision=decision)
+
+    # Auto-enqueue for delivery or human review
+    import uuid
+    from datetime import UTC, datetime, timedelta
+
+    from taskflow.domain.enums import ReviewState, RouteAction
+    from taskflow.domain.models import OutboundMessage, ReviewItem
+
+    if decision.action == RouteAction.AUTO_SEND and deps.outbox_repo and state.draft:
+        outbound_id = f"out-{uuid.uuid4().hex[:12]}"
+        idempotency_key = OutboundMessage.make_idempotency_key(
+            state.trace.conversation_id, state.draft.response_text
+        )
+        outbound_msg = OutboundMessage(
+            outbound_id=outbound_id,
+            conversation_id=state.trace.conversation_id,
+            tenant_id=msg.tenant_id,
+            channel=msg.channel,
+            recipient=msg.sender,
+            subject=f"Re: {msg.subject}" if msg.subject else "Re: TaskFlow Support Request",
+            body_text=state.draft.response_text,
+            idempotency_key=idempotency_key,
+        )
+        await deps.outbox_repo.enqueue(outbound_msg)
+
+    elif decision.action == RouteAction.HUMAN_REVIEW and deps.review_repo:
+        now = datetime.now(UTC)
+        review_item = ReviewItem(
+            review_id=f"rev-{uuid.uuid4().hex[:12]}",
+            trace_id=state.trace.trace_id,
+            conversation_id=state.trace.conversation_id,
+            tenant_id=msg.tenant_id,
+            state=ReviewState.PENDING,
+            draft=state.draft,
+            decision=decision,
+            created_at=now,
+            sla_deadline=now + timedelta(hours=4),
+        )
+        await deps.review_repo.create(review_item)
 
     # 7. Finalize trace
     await deps.trace_repo.update(state.trace)

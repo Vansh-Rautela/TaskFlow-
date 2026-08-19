@@ -20,11 +20,11 @@ from taskflow.domain.models import ReviewItem
 logger = structlog.get_logger()
 
 
-async def send_email_alert(subject: str, body: str) -> bool:
+async def send_email_alert(subject: str, body: str, recipient: str | None = None) -> bool:
     """Send an instant email notification using Gmail SMTP credentials."""
     user = settings().gmail_user
     password = settings().gmail_app_password
-    to_email = settings().ops_email or user
+    to_email = recipient or settings().ops_email or user
 
     if not user or not password:
         logger.debug("email_alert_skipped", reason="GMAIL_USER or GMAIL_APP_PASSWORD not set")
