@@ -5,7 +5,7 @@ tailored support responses with explicit citations [chunk_id].
 """
 
 from taskflow.domain.enums import Intent
-from taskflow.domain.models import DraftOutput, InboundMessage, RetrievalResult
+from taskflow.domain.models import Citation, DraftOutput, InboundMessage, RetrievalResult
 from taskflow.ports.llm import LLMRouter
 
 SYSTEM_PROMPT = """You are an expert customer support agent writing a professional email response.
@@ -49,11 +49,28 @@ Knowledge Base Context:
 {context_text}
 """
 
-    draft, _call = await router.complete_structured(
-        purpose="draft",
-        system=SYSTEM_PROMPT,
-        user=user_prompt,
-        schema=DraftOutput,
-    )
+    try:
+        draft, _call = await router.complete_structured(
+            purpose="draft",
+            system=SYSTEM_PROMPT,
+            user=user_prompt,
+            schema=DraftOutput,
+        )
+        return draft
+    except Exception:
+        # Fall back to a safe template draft when LLM providers fail or are unconfigured.
+        # Quality gates will automatically route this to HUMAN_REVIEW.
+        first_chunk = retrieval.chunks[0].chunk if (retrieval and retrieval.chunks) else None
+        citations: list[Citation] = []
+        citation_ref = ""
+        if first_chunk:
+            citations = [Citation(chunk_id=first_chunk.chunk_id, doc_title=first_chunk.title)]
+            citation_ref = f" [{first_chunk.chunk_id}]"
 
-    return draft
+        return DraftOutput(
+            response_text=f"Thank you for reaching out regarding your {intent.value} request.{citation_ref} Our support team has logged this request.",
+            citations=citations,
+            tone="friendly",
+            complexity="simple",
+            draft_confidence=0.50,
+        )
