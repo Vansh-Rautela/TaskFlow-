@@ -188,7 +188,7 @@ with tab3:
 
     total_msg = len(traces)
     auto_cnt = sum(
-        1 for t in traces if t.decision and t.decision.action.value == "auto_reply"
+        1 for t in traces if t.decision and t.decision.action.value == "auto_send"
     )
     human_cnt = sum(
         1 for t in traces if t.decision and t.decision.action.value == "human_review"
@@ -199,7 +199,7 @@ with tab3:
 
     kpi1.metric("Total Messages Processed", f"{total_msg}")
     kpi2.metric(
-        "Auto-Reply Rate", f"{(auto_cnt / total_msg * 100):.1f}%" if total_msg else "0.0%"
+        "Auto-Send Rate", f"{(auto_cnt / total_msg * 100):.1f}%" if total_msg else "0.0%"
     )
     kpi3.metric(
         "Human Review Rate", f"{(human_cnt / total_msg * 100):.1f}%" if total_msg else "0.0%"

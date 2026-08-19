@@ -44,12 +44,13 @@ async def approve_review(
         return False
 
     if item.draft and item.draft.response_text:
+        recipient = item.sender_email or "support-fallback@taskflow.dev"
         outbound = OutboundMessage(
             outbound_id=uuid.uuid4().hex[:12],
             conversation_id=item.conversation_id,
             tenant_id=item.tenant_id,
             channel=Channel.EMAIL,
-            recipient="customer@example.com",
+            recipient=recipient,
             subject="Re: Support Request",
             body_text=item.draft.response_text,
             reply_headers={},
@@ -95,12 +96,13 @@ async def edit_and_approve_review(
     )
     await review_repo.record_edit(edit_rec)
 
+    recipient = item.sender_email or "support-fallback@taskflow.dev"
     outbound = OutboundMessage(
         outbound_id=uuid.uuid4().hex[:12],
         conversation_id=item.conversation_id,
         tenant_id=item.tenant_id,
         channel=Channel.EMAIL,
-        recipient="customer@example.com",
+        recipient=recipient,
         subject="Re: Support Request",
         body_text=edited_text,
         reply_headers={},

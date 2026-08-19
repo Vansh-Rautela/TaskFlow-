@@ -20,6 +20,7 @@ from taskflow.services.classify.service import classify_intent
 from taskflow.services.confidence.gates import evaluate_gates
 from taskflow.services.confidence.scorer import compute, decide
 from taskflow.services.draft.service import generate_draft
+from taskflow.services.preprocess.service import preprocess_message_text
 from taskflow.services.retrieve.service import retrieve_context
 from taskflow.services.validate.runner import run_validators
 
@@ -56,20 +57,22 @@ async def _time_stage[T](
 async def run_pipeline(msg: InboundMessage, deps: Deps) -> RoutingDecision:
     """Execute the full AI support agent pipeline path."""
 
-    # 0. Initialize Trace & State
-    trace = await deps.trace_repo.start(msg)
-    state = PipelineState(message=msg, trace=trace)
+    # 0. Initialize Trace & State and Preprocess PII
+    redacted_body = preprocess_message_text(msg.body_text)
+    redacted_msg = msg.model_copy(update={"body_redacted": redacted_body})
+    trace = await deps.trace_repo.start(redacted_msg)
+    state = PipelineState(message=redacted_msg, trace=trace)
 
     # 1. Classify
     state, (intent, intent_confidence) = await _time_stage(
-        state, deps, "classify", classify_intent(msg.body_text, router=deps.llm_router)
+        state, deps, "classify", classify_intent(redacted_body, router=deps.llm_router)
     )
     state = state.replace(intent=intent, intent_confidence=intent_confidence)
 
     # 2. Retrieve
     store = deps.vector_store or QdrantVectorStore()
     state, retrieval = await _time_stage(
-        state, deps, "retrieve", retrieve_context(msg.body_text, msg.tenant_id, vector_store=store)
+        state, deps, "retrieve", retrieve_context(redacted_body, msg.tenant_id, vector_store=store)
     )
     state = state.replace(retrieval=retrieval)
 
@@ -90,25 +93,31 @@ async def run_pipeline(msg: InboundMessage, deps: Deps) -> RoutingDecision:
 
     # 5. Evaluate Gates (Safety Vetoes)
     assert state.intent is not None
+    citations_val = next((v for v in state.validators if v.validator_name == "citations"), None)
+    citations_resolve = citations_val.passed if citations_val else True
+    suspicious_context = state.retrieval.suspicious_context if state.retrieval else False
+
     state, gates_result = await _time_stage(
         state,
         deps,
         "evaluate_gates",
-        # Using async wrapper just for timing consistency, though this is synchronous math
         asyncio_wrap(
             evaluate_gates(
                 intent=state.intent,
                 intent_confidence=state.intent_confidence,
-                abstain_threshold=0.55,  # hardcoded config for P2 stub
+                abstain_threshold=0.55,
                 validators=list(state.validators),
-                violations=[],  # assuming none for pipeline mock scenario
-                citations_resolve=True,  # assuming true unless citations validator failed
-                suspicious_context=False,
+                violations=[],
+                citations_resolve=citations_resolve,
+                suspicious_context=suspicious_context,
             )
         ),
     )
 
     # 6. Score & Decide (Quality math)
+    grounding_val = next((v for v in state.validators if v.validator_name == "grounding"), None)
+    grounding_score = grounding_val.score if grounding_val else 1.0
+
     weights = {
         "citation_coverage": 0.35,
         "grounding_entailment": 0.25,
@@ -119,11 +128,9 @@ async def run_pipeline(msg: InboundMessage, deps: Deps) -> RoutingDecision:
     signals = {
         "intent_confidence": state.intent_confidence,
         "retrieval_relevance": 1.0 if (state.retrieval and state.retrieval.sufficient) else 0.0,
-        "citation_coverage": 1.0
-        if any(v.validator_name == "citations" and v.passed for v in state.validators)
-        else 0.0,
-        "grounding_entailment": 1.0,  # Stub for P2 skeleton (will be provided by grounding validator in P7)
-        "tone_alignment": 1.0,  # Stub for P2 skeleton (will be provided by tone validator in P7)
+        "citation_coverage": 1.0 if (citations_val and citations_val.passed) else 0.0,
+        "grounding_entailment": grounding_score,
+        "tone_alignment": 1.0,
     }
 
     breakdown = compute(
@@ -173,10 +180,23 @@ async def run_pipeline(msg: InboundMessage, deps: Deps) -> RoutingDecision:
             decision=decision,
             created_at=now,
             sla_deadline=now + timedelta(hours=4),
+            sender_email=msg.sender,
         )
         await deps.review_repo.create(review_item)
 
     # 7. Finalize trace
+    updated_trace = state.trace.model_copy(
+        update={
+            "intent": state.intent,
+            "intent_confidence": state.intent_confidence,
+            "retrieval": state.retrieval,
+            "draft": state.draft,
+            "validators": list(state.validators),
+            "confidence": state.confidence,
+            "decision": decision,
+        }
+    )
+    state = state.replace(trace=updated_trace)
     await deps.trace_repo.update(state.trace)
     await deps.trace_repo.finish(state.trace.trace_id, decision)
 

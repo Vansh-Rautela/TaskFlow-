@@ -21,6 +21,7 @@ from taskflow.adapters.db.repositories import (
 )
 from taskflow.adapters.llm.claude import ClaudeProvider
 from taskflow.adapters.llm.ollama import OllamaProvider
+from taskflow.adapters.llm.openrouter import OpenRouterProvider
 from taskflow.adapters.llm.router import ProviderRouter
 from taskflow.adapters.vector.qdrant_store import QdrantVectorStore
 from taskflow.domain.enums import Channel
@@ -49,15 +50,20 @@ async def lifespan(app: FastAPI):
     review_repo = SQLiteReviewRepository(factory)
     outbox_repo = SQLiteOutboxRepository(factory)
 
+    openrouter_p = OpenRouterProvider()
     claude_p = ClaudeProvider()
     ollama_p = OllamaProvider()
-    llm_router = ProviderRouter(providers={"claude": claude_p, "ollama": ollama_p})
+    llm_router = ProviderRouter(
+        providers={"openrouter": openrouter_p, "claude": claude_p, "ollama": ollama_p}
+    )
     vector_store = QdrantVectorStore()
 
     deps_container["deps"] = Deps(
         trace_repo=trace_repo,
         llm_router=llm_router,
         vector_store=vector_store,
+        review_repo=review_repo,
+        outbox_repo=outbox_repo,
     )
     deps_container["engine"] = engine
     deps_container["review_repo"] = review_repo
@@ -201,16 +207,16 @@ async def get_metrics():
         for call in t.llm_calls:
             total_cost_usd += call.cost_usd
 
-    auto_reply_count = actions.get("auto_reply", 0)
+    auto_send_count = actions.get("auto_send", 0)
     human_review_count = actions.get("human_review", 0)
 
-    auto_reply_rate = (auto_reply_count / total_traces * 100.0) if total_traces > 0 else 0.0
+    auto_send_rate = (auto_send_count / total_traces * 100.0) if total_traces > 0 else 0.0
     human_review_rate = (human_review_count / total_traces * 100.0) if total_traces > 0 else 0.0
 
     return {
         "total_traces": total_traces,
         "actions_breakdown": dict(actions),
-        "auto_reply_rate_pct": round(auto_reply_rate, 2),
+        "auto_send_rate_pct": round(auto_send_rate, 2),
         "human_review_rate_pct": round(human_review_rate, 2),
         "total_cost_usd": round(total_cost_usd, 6),
     }

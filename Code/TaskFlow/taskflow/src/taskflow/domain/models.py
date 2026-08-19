@@ -210,6 +210,7 @@ class ReviewItem(Base):
     created_at: datetime
     sla_deadline: datetime
     escalated_at: datetime | None = None
+    sender_email: str | None = None  # original customer sender for reply addressing
 
 
 class EditRecord(Base):

@@ -150,4 +150,4 @@ async def test_metrics_api(api_deps):
     assert response.status_code == 200
     data = response.json()
     assert "total_traces" in data
-    assert "auto_reply_rate_pct" in data
+    assert "auto_send_rate_pct" in data
