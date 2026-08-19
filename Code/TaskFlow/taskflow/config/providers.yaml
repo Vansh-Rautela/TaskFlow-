@@ -22,7 +22,7 @@ providers:
       grounding: openai/gpt-4o-mini
       datagen: openai/gpt-4o-mini
     timeout_s: 30
-    pricing: {in_per_1k: 0.001, out_per_1k: 0.005}
+    pricing: {in_per_1k: 0.00015, out_per_1k: 0.0006}
 
   claude:
     api_key_env: ANTHROPIC_API_KEY

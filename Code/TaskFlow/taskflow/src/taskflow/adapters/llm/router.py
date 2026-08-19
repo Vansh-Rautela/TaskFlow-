@@ -1,4 +1,4 @@
-"""Provider Router implementation for Phase P4.
+"""Provider Router implementation for Phase P4 & P10.
 
 Routes structured LLM requests through prioritized providers with automatic failover,
 schema validation, cost tracking, and offline mode support.
@@ -62,29 +62,13 @@ class ProviderRouter(LLMRouter):
                     schema=schema,
                 )
 
-                # Parse and validate structured output against target schema
-                try:
-                    if isinstance(response.text, str):
-                        parsed_obj = schema.model_validate_json(response.text)
-                    else:
-                        parsed_obj = schema.model_validate(response.text)
-                except ValidationError as val_err:
-                    raise SchemaError(
-                        f"Output from provider {provider_name} failed schema validation: {val_err}"
-                    ) from val_err
-
-                call_record = LLMCall(
-                    purpose=purpose,
-                    provider=provider_name,
-                    model=model_name,
-                    prompt_tokens=response.call.prompt_tokens,
-                    completion_tokens=response.call.completion_tokens,
-                    cost_usd=response.call.cost_usd,
-                    latency_ms=response.call.latency_ms,
-                    attempts=attempts,
-                    failed_over=(attempts > 1),
+                call_record = response.call.model_copy(
+                    update={
+                        "provider": provider_name,
+                        "attempts": attempts,
+                        "failed_over": attempts > 1,
+                    }
                 )
-
                 logger.info(
                     "router_complete_success",
                     provider=provider_name,
@@ -92,27 +76,35 @@ class ProviderRouter(LLMRouter):
                     cost_usd=call_record.cost_usd,
                     attempts=attempts,
                 )
-                return parsed_obj, call_record
 
-            except (ProviderError, SchemaError, TransientError, TimeoutError) as err:
+                if schema:
+                    try:
+                        parsed_object = schema.model_validate_json(response.text)
+                        return parsed_object, call_record
+                    except ValidationError as err:
+                        raise SchemaError(
+                            f"Response from {provider_name} failed schema validation: {err}"
+                        ) from err
+
+                raise SchemaError(f"Schema required for complete_structured call ({purpose})")
+
+            except (TransientError, ProviderError, SchemaError) as err:
                 logger.warning(
                     "provider_attempt_failed",
                     provider=provider_name,
-                    error=str(err),
                     attempt=attempts,
-                )
-                last_error = err
-                continue
-            except Exception as err:
-                logger.warning(
-                    "provider_attempt_unexpected_failure",
-                    provider=provider_name,
                     error=str(err),
-                    attempt=attempts,
                 )
                 last_error = err
                 continue
 
+        logger.error(
+            "all_providers_failed",
+            attempts=attempts,
+            mode=mode,
+            priority=priority,
+            last_error=str(last_error),
+        )
         raise AllProvidersFailed(
             f"All providers failed for mode '{mode}'. Last error: {last_error}"
-        ) from last_error
+        )

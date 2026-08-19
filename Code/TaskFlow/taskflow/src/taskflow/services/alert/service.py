@@ -54,7 +54,7 @@ async def send_telegram_alert(text: str) -> bool:
     token = settings().telegram_bot_token
     chat_id = settings().telegram_chat_id
 
-    if not token or not chat_id or not httpx:
+    if not token or not chat_id:
         return False
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -72,7 +72,7 @@ async def send_telegram_alert(text: str) -> bool:
 async def send_slack_alert(text: str) -> bool:
     """Send alert message to Slack incoming webhook."""
     webhook_url = settings().slack_webhook_url
-    if not webhook_url or not httpx:
+    if not webhook_url:
         return False
 
     try:
@@ -87,7 +87,7 @@ async def send_slack_alert(text: str) -> bool:
 async def send_custom_webhook_alert(payload: dict) -> bool:
     """Send alert payload to generic HTTP Webhook URL."""
     webhook_url = settings().alert_webhook_url
-    if not webhook_url or not httpx:
+    if not webhook_url:
         return False
 
     try:
